@@ -69,11 +69,17 @@ const validateStatusCode = (code) => {
   return true
 };
 
-const validateRequest = (items) => {
+const validateRequest = items => {
     if(!items.length > 0) {
     return false
   }
   return true
+};
+
+// validateFlowFields checks that all given field names exist on the given object.
+// This prevents blind updates to fields that are not there.
+const validateFlowFields = (object, fields) => {
+  return fields.some(el => !el in object);
 };
 
 /*
@@ -88,37 +94,50 @@ const transferData = (client, orderItems, cartItems, map) => {
 
   map.forEach(async (mapItem, index) => {
 
+    // grab the order item object in full
     var orderItem = orderItems.find(function(item) {
       return item.id == mapItem.order;
     });
 
+    // grab the cart item object in full
     var cartItem = cartItems.find(function(item) {
       return item.id == mapItem.cart;
     });
 
+    // convert the cart item to an array
     let cartItemArr = Object.keys(cartItem);
 
-    let filtered = cartItemArr.filter( function( el ) {
+    // filter the cart item and return only the custom fields
+    let customFields = cartItemArr.filter( function( el ) {
       return cart_struct.indexOf( el ) < 0;
     });
 
+    // Returns false if any custom cart item fields do not exist on an order item
+    if(!validateFlowFields(orderItem, customFields)) {
+      results.push({'code': 500, 'message': 'you are updating non existant fields on order items'});
+      return
+    }
+
+    // build the full object containing custom fields and values
     const objectToUse = Object.keys(cartItem)
-      .filter(key => filtered.includes(key))
+      .filter(key => customFields.includes(key))
       .reduce((obj, key) => {
         obj[key] = cartItem[key];
         return obj;
       }, {});
 
+    // update the Moltin order item with the custom fields and values
     let orderItemUpdated = await client.put('flows/order_items/entries/' + mapItem.order, objectToUse);
 
-    results.push(orderItemUpdated.responseCode)      
+    results.push({'code': orderItemUpdated.responseCode, 'message': null})      
   });
 
-  if(!results.every(x => x === 200)) {
-    return false
+  if(!results.every(x => x.code === 200)) {
+    return [false, null]
   }
-  return true
-}
+
+  return [true, null]
+};
 
 const generateResponse = (code, mess) => {
 
@@ -171,12 +190,12 @@ module.exports.transferFlows = async (event, context) => {
 
     let orderItemUpdateResponse = await transferData(client, orderItems[1],cartItems[1], mapped)
 
-    if(!orderItemUpdateResponse) {
-      return generateResponse(orderItemUpdateResponse.responseCode, 'error updating the order');
+
+    if(!orderItemUpdateResponse[0]) {
+      return generateResponse(500, orderItemUpdateResponse[1]);
     }
 
     return generateResponse(200, 'Great success');
-
 
   } catch (error) {
     generateResponse(500, error);
