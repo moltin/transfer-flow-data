@@ -160,7 +160,22 @@ module.exports.transferFlows = async (event, context) => {
     client_secret: process.env.MOLTIN_CLIENT_SECRET
   })
 
-  let body = JSON.parse(event.body);
+  const IsJsonString = function(str) {
+    try {
+        JSON.parse(str);
+    } catch (e) {
+        return false;
+    }
+    return true;
+  }
+
+  let body;
+
+  if (IsJsonString(event.body)) {
+      body = JSON.parse(event.body);
+  } else {
+      body = event.body;
+  }
 
   // validate the fields required to continue
   if (!('orderID' in body)) {
