@@ -1,4 +1,4 @@
-This repository contains a single serverless function with accepts an order ID and a cart ID.
+This repository contains a single serverless function that accepts an order ID and a cart ID.
 
 When run, it will attempt to transfer any custom flow data from each cart item onto their associated order item.
 
